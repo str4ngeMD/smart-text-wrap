@@ -52,58 +52,98 @@
       document.getElementById("output").value = outputLines.join('\n');
     }
 
-    function splitLineSmart(line, maxWidth) {
-      if (line.length <= maxWidth) return [line];
 
-      const result = [];
+function splitLineSmart(line, maxWidth) {
+  if (line.length <= maxWidth) return [line];
 
-      let segment = line;
-      while (segment.length > maxWidth) {
-        const breakIndex = findBestBreak(segment, maxWidth);
-        if (breakIndex <= 0) break; // no good break, force it
+  const result = [];
+  let segment = line;
 
-        const left = segment.slice(0, breakIndex + 1).trim();
-        const right = segment.slice(breakIndex + 1).trim();
+  while (segment.length > maxWidth) {
+    const breakIndex = findBestBreak(segment, maxWidth);
 
-        result.push(left);
-        segment = right;
+    if (breakIndex === -1 || breakIndex >= segment.length - 1) {
+      // Fallback: break at last space before maxWidth
+      const fallback = segment.lastIndexOf(' ', maxWidth);
+      if (fallback === -1) {
+        // No space to break — force break at maxWidth (but never mid-word)
+        const wordEnd = segment.slice(0, maxWidth).search(/\s\S*$/);
+        const safeCut = wordEnd > 0 ? wordEnd : maxWidth;
+        result.push(segment.slice(0, safeCut).trim());
+        segment = segment.slice(safeCut).trim();
+        continue;
+      } else {
+        result.push(segment.slice(0, fallback).trim());
+        segment = segment.slice(fallback).trim();
+        continue;
       }
-
-      if (segment.length > 0) result.push(segment);
-      return result;
     }
 
-    function findBestBreak(line, maxWidth) {
-      const candidates = [];
+    // Safe break
+    const left = segment.slice(0, breakIndex + 1).trimEnd();
+    const right = segment.slice(breakIndex + 1).trimStart();
+    result.push(left);
+    segment = right;
+  }
 
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        if (char === ',' || char === ':') {
-          candidates.push(i);
-        }
-      }
+  if (segment.length > 0) result.push(segment);
+  return result;
+}
 
-      if (candidates.length > 0) {
-        let bestIndex = -1;
-        let bestBalance = Infinity;
 
-        for (const idx of candidates) {
-          const left = line.slice(0, idx + 1).trim();
-          const right = line.slice(idx + 1).trim();
 
-          const balance = Math.abs(left.length - right.length);
-          if (left.length <= maxWidth && balance < bestBalance) {
-            bestIndex = idx;
-            bestBalance = balance;
-          }
-        }
 
-        if (bestIndex !== -1) return bestIndex;
-      }
+function findBestBreak(line, maxWidth) {
+  if (line.length <= maxWidth) return -1; // No need to break
 
-      // fallback to last space before maxWidth
-      return line.lastIndexOf(' ', maxWidth);
+  const punctuation = [',', ':'];
+  const breakChars = [' ', ...punctuation];
+  const candidates = [];
+
+  for (let i = 0; i < line.length; i++) {
+    if (breakChars.includes(line[i])) {
+      candidates.push(i);
     }
+  }
+
+  // Prefer best balanced punctuation split
+  let bestIndex = -1;
+  let bestBalance = Infinity;
+
+  for (const i of candidates) {
+    const left = line.slice(0, i + 1).trim();
+    const right = line.slice(i + 1).trim();
+    const lenL = left.length, lenR = right.length;
+    const ratio = Math.max(lenL / (lenR || 1), lenR / (lenL || 1));
+    const balance = Math.abs(lenL - lenR);
+
+    if (lenL <= maxWidth && lenR <= maxWidth) {
+      if (punctuation.includes(line[i]) && ratio <= 2 && balance < bestBalance) {
+        bestIndex = i;
+        bestBalance = balance;
+      }
+    }
+  }
+
+  // Fallback: space-based, closest to center
+  if (bestIndex === -1) {
+    for (const i of candidates) {
+      const left = line.slice(0, i).trim();
+      const right = line.slice(i + 1).trim();
+      const balance = Math.abs(left.length - right.length);
+
+      if (left.length <= maxWidth && right.length <= maxWidth && balance < bestBalance) {
+        bestIndex = i;
+        bestBalance = balance;
+      }
+    }
+  }
+
+  return bestIndex;
+}
+
+
+    
   </script>
 
 </body>
